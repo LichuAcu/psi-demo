@@ -1,16 +1,12 @@
-// import { Cipher, getRandomValues } from "crypto";
 import SEAL from "node-seal";
 import { CipherText } from "node-seal/implementation/cipher-text";
 import { PlainText } from "node-seal/implementation/plain-text";
 import { BatchEncoder } from "node-seal/implementation/batch-encoder";
 import { Encryptor } from "node-seal/implementation/encryptor";
 import { SEALLibrary } from "node-seal/implementation/seal";
-// import { randomBytes } from "crypto";
 import { Context } from "node-seal/implementation/context";
 import { Evaluator } from "node-seal/implementation/evaluator";
 import { Decryptor } from "node-seal/implementation/decryptor";
-import { copyFileSync } from "fs";
-import { count } from "console";
 
 let seal: SEALLibrary;
 let context: Context;
@@ -21,7 +17,9 @@ let evaluator: Evaluator;
 
 const batch_size = 3;
 
+// step 1
 export const setup = async () => {
+    console.log("===============================\nSTEP 1: setup\n===============================");
     seal = await SEAL();
     const schemeType = seal.SchemeType.bfv;
     const securityLevel = seal.SecurityLevel.tc128;
@@ -61,18 +59,19 @@ export const setup = async () => {
     evaluator = seal.Evaluator(context);
 };
 
+// step 2
 export const receiver_encrypt_locations = (locations_receiver: number[]): [string, number] => {
     console.log("participating as receiver");
-    console.log("=========================\nSTEP 1: encrypt locations\n=========================");
+    console.log("=========================\nSTEP 2: encrypt locations\n=========================");
 
     const set_receiver = Int32Array.from(locations_receiver);
     const set_receiver_length = set_receiver.length;
 
-    // Encode receiver set
+    // encode receiver set
     const set_plaintexts_receiver = encoder.encode(set_receiver) as PlainText;
 
-    // Encrypt the each element in the receiver set
-    // This is sent to the sender
+    // encrypt each element in the receiver set
+    // this is sent to the sender
     const set_ciphertexts_receiver = encryptor.encrypt(set_plaintexts_receiver) as CipherText;
 
     const set_ciphertexts_receiver_string = set_ciphertexts_receiver.save();
@@ -82,6 +81,7 @@ export const receiver_encrypt_locations = (locations_receiver: number[]): [strin
     return [set_ciphertexts_receiver_string, set_receiver_length];
 };
 
+// step 3 + optimization
 export const sender_homomorphicaly_subtract_locations = (
     set_ciphertexts_receiver_string: string,
     set_receiver_length: number,
@@ -89,15 +89,15 @@ export const sender_homomorphicaly_subtract_locations = (
 ): string[] => {
     console.log("participating as sender");
     console.log(
-        "============================================\nSTEP 2: homomorphically compute intersection\n============================================"
+        "============================================\nSTEP 3: homomorphically compute intersection\n============================================"
     );
     console.log("(optimization) using batches of size " + batch_size);
     let results_sender: string[] = [];
     let set_ciphertexts_receiver: CipherText = seal.CipherText();
 
-    // const locations_sender = [1, 2, 3, 4, 5, 6].map(Number);
-
     set_ciphertexts_receiver.load(context, set_ciphertexts_receiver_string);
+
+    // as specified in the README, we split the sender set into multiple subsets, each of size batch_size, for optimization
     const sets_plaintexts_sender = [];
     for (let i = 0; i < locations_sender.length; i += batch_size) {
         const batch = locations_sender.slice(i, i + batch_size);
@@ -105,12 +105,9 @@ export const sender_homomorphicaly_subtract_locations = (
     }
     let counter = 0;
     sets_plaintexts_sender.forEach((set_plaintexts_sender) => {
-        // Generate random (non-zero) plaintexts
+        // perform step 3 of the algorithm with each subset
         let random_plaintext = new Int32Array(set_receiver_length);
         crypto.getRandomValues(random_plaintext);
-        // for (let i = 0; i < set_receiver_length; i++) {
-        //     random_plaintext[i] = require("crypto").randomBytes(32).readUInt32BE();
-        // }
         const random_plaintext_encoded = encoder.encode(random_plaintext) as PlainText;
 
         const result_sender = seal.CipherText();
@@ -144,9 +141,10 @@ export const sender_homomorphicaly_subtract_locations = (
     return results_sender;
 };
 
+// step 4
 export const receiver_decrypt_intersection = (results_sender: string[], set_receiver_length: number): number[] => {
     console.log(
-        "================================\nSTEP 3: decrypting intersections\n================================\n(belongs to the intersection iff decryption equals 0 in at least one batch)"
+        "================================\nSTEP 4: decrypting intersections\n================================\n(belongs to the intersection iff decryption equals 0 in at least one batch)"
     );
     let intersection_indexes = [];
     let counter: number = 1;
