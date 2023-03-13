@@ -36,7 +36,6 @@ io.on("connection", (socket: Socket) => {
 
     socket.on("postIntersection", (message: IntersectionMessage) => {
         console.log("----- postIntersection -----");
-        // console.log(message);
         socket.broadcast.emit("updatedIntersection", message);
     });
 

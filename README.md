@@ -34,4 +34,4 @@ The efficiency of the algorithm can be further improved by running step 3 in par
 
 ## Contact information
 
-For any doubt, feel free to [shoot me an email](mailto:acuna@stanford.edu).
+If you have any questions, please do not hesitate to [shoot me an email](mailto:acuna@stanford.edu).
