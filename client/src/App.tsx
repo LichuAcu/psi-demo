@@ -89,10 +89,10 @@ export const App = () => {
     useEffect(() => {
         socket.removeAllListeners("updatedFirstRoundCipherTexts");
 
-        socket.on("updatedFirstRoundCipherTexts", ({ ciphers, length }: CipherTextsMessage) => {
+        socket.on("updatedFirstRoundCipherTexts", async ({ ciphers, length }: CipherTextsMessage) => {
             // console.log("listened updatedFirstRoundCipherTexts");
             const locations_sender = storageLocations.map(Number);
-            const secondRoundCiphers: string[] = sender_homomorphicaly_subtract_locations(
+            const secondRoundCiphers: string[] = await sender_homomorphicaly_subtract_locations(
                 ciphers,
                 length,
                 locations_sender

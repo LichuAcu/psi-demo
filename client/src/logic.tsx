@@ -76,69 +76,100 @@ export const receiver_encrypt_locations = (locations_receiver: number[]): [strin
 
     const set_ciphertexts_receiver_string = set_ciphertexts_receiver.save();
 
-    console.log("sending encrypted locations: \n", set_ciphertexts_receiver_string);
+    // console.log("sending encrypted locations: \n", set_ciphertexts_receiver_string);
 
     return [set_ciphertexts_receiver_string, set_receiver_length];
 };
 
+const step_3_subset = async (
+    set_plaintexts_sender: Int32Array,
+    set_ciphertexts_receiver: CipherText,
+    set_sender_length: number,
+    set_receiver_length: number,
+    counter: number
+): Promise<string> => {
+    console.log("started subset ", counter);
+    // perform step 3 of the algorithm with each subset
+    let random_plaintext = new Int32Array(set_receiver_length);
+    crypto.getRandomValues(random_plaintext);
+    const random_plaintext_encoded = encoder.encode(random_plaintext) as PlainText;
+
+    const result_sender = seal.CipherText();
+    const result_sender_first_value = Int32Array.from(Array(set_receiver_length).fill(set_plaintexts_sender[0]));
+    const result_sender_first_value_encoded = encoder.encode(result_sender_first_value) as PlainText;
+
+    evaluator.subPlain(set_ciphertexts_receiver, result_sender_first_value_encoded, result_sender);
+
+    for (let i = 1; i < set_plaintexts_sender.length; i++) {
+        const ith_value_sender = Int32Array.from(Array(set_receiver_length).fill(set_plaintexts_sender[i]));
+        const ith_value_sender_encoded = encoder.encode(ith_value_sender) as PlainText;
+        const temp = seal.CipherText();
+        evaluator.subPlain(set_ciphertexts_receiver, ith_value_sender_encoded, temp);
+        evaluator.multiply(result_sender, temp, result_sender);
+    }
+
+    evaluator.multiplyPlain(result_sender, random_plaintext_encoded, result_sender);
+    const result_sender_string = result_sender.save();
+    // console.log(
+    //     "randomized polynomial for ciphertexts " +
+    //         counter * batch_size +
+    //         " to " +
+    //         Math.min((counter + 1) * batch_size, set_sender_length) +
+    //         ":\n",
+    //     result_sender_string
+    // );
+    console.log("finished subset ", counter);
+    return result_sender_string;
+};
+
 // step 3 + optimization
-export const sender_homomorphicaly_subtract_locations = (
+export const sender_homomorphicaly_subtract_locations = async (
     set_ciphertexts_receiver_string: string,
     set_receiver_length: number,
     locations_sender: number[]
-): string[] => {
+): Promise<string[]> => {
     console.log("participating as sender");
     console.log(
         "============================================\nSTEP 3: homomorphically compute intersection\n============================================"
     );
     console.log("(optimization) using batches of size " + batch_size);
-    let results_sender: string[] = [];
     let set_ciphertexts_receiver: CipherText = seal.CipherText();
 
     set_ciphertexts_receiver.load(context, set_ciphertexts_receiver_string);
 
     // as specified in the README, we split the sender set into multiple subsets, each of size batch_size, for optimization
-    const sets_plaintexts_sender = [];
+    const sets_plaintexts_sender: Int32Array[] = [];
     for (let i = 0; i < locations_sender.length; i += batch_size) {
         const batch = locations_sender.slice(i, i + batch_size);
         sets_plaintexts_sender.push(Int32Array.from(batch));
     }
     let counter = 0;
-    sets_plaintexts_sender.forEach((set_plaintexts_sender) => {
-        // perform step 3 of the algorithm with each subset
-        let random_plaintext = new Int32Array(set_receiver_length);
-        crypto.getRandomValues(random_plaintext);
-        const random_plaintext_encoded = encoder.encode(random_plaintext) as PlainText;
-
-        const result_sender = seal.CipherText();
-        const result_sender_first_value = Int32Array.from(Array(set_receiver_length).fill(set_plaintexts_sender[0]));
-        const result_sender_first_value_encoded = encoder.encode(result_sender_first_value) as PlainText;
-
-        evaluator.subPlain(set_ciphertexts_receiver, result_sender_first_value_encoded, result_sender);
-
-        for (let i = 1; i < set_plaintexts_sender.length; i++) {
-            const ith_value_sender = Int32Array.from(Array(set_receiver_length).fill(set_plaintexts_sender[i]));
-            const ith_value_sender_encoded = encoder.encode(ith_value_sender) as PlainText;
-            const temp = seal.CipherText();
-            evaluator.subPlain(set_ciphertexts_receiver, ith_value_sender_encoded, temp);
-            evaluator.multiply(result_sender, temp, result_sender);
-        }
-
-        evaluator.multiplyPlain(result_sender, random_plaintext_encoded, result_sender);
-        const result_sender_string = result_sender.save();
-        console.log(
-            "randomized polynomial for ciphertexts " +
-                counter * batch_size +
-                " to " +
-                Math.min((counter + 1) * batch_size, locations_sender.length) +
-                ":\n",
-            result_sender_string
+    let results_promises: Promise<string>[] = [];
+    for (const set_plaintexts_sender of sets_plaintexts_sender) {
+        const find_subset_intersection: Promise<string> = step_3_subset(
+            set_plaintexts_sender,
+            set_ciphertexts_receiver,
+            locations_sender.length,
+            set_receiver_length,
+            counter
         );
         counter++;
-        results_sender.push(result_sender_string);
-    });
+        console.log("next one is called");
+        results_promises.push(find_subset_intersection);
+    }
 
-    return results_sender;
+    let result: string[] = [];
+
+    await Promise.all(results_promises).then(
+        (subsets_intersections: string[]) => {
+            result = subsets_intersections;
+        },
+        (reason) => {
+            console.log("There was an error", reason);
+        }
+    );
+
+    return result;
 };
 
 // step 4
@@ -153,7 +184,7 @@ export const receiver_decrypt_intersection = (results_sender: string[], set_rece
         result_sender_ciphertext.load(context, result_sender);
         const decrypted = decryptor.decrypt(result_sender_ciphertext) as PlainText;
         const decoded = encoder.decode(decrypted);
-        console.log("intersections for batch number " + counter + ":", decoded.slice(0, set_receiver_length));
+        // console.log("intersections for batch number " + counter + ":", decoded.slice(0, set_receiver_length));
         for (let i = 0; i < set_receiver_length; i++) {
             if (decoded[i] == 0) {
                 intersection_indexes.push(i);
