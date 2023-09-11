@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext } from "react";
-import { ChakraProvider, Box, VStack, Grid, theme, Input, Button, HStack } from "@chakra-ui/react";
+import { ChakraProvider, Box, VStack, Grid, theme, Input, Button, HStack, Text } from "@chakra-ui/react";
 import { io } from "socket.io-client";
 import {
     setup,
@@ -113,7 +113,7 @@ export const App = () => {
                         </HStack>
                         <HStack width="100%" paddingTop="2em">
                             <Input
-                                placeholder="Storage location"
+                                placeholder="Numerical values separated by commas"
                                 onChange={(event) => setInput(event.target.value)}
                                 value={input}
                             />

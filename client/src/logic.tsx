@@ -17,7 +17,7 @@ let evaluator: Evaluator;
 
 const batch_size = 3;
 
-// step 1
+// Step 1
 export const setup = async () => {
     console.log("===============================\nSTEP 1: setup\n===============================");
     seal = await SEAL();
@@ -59,7 +59,7 @@ export const setup = async () => {
     evaluator = seal.Evaluator(context);
 };
 
-// step 2
+// Step 2
 export const receiver_encrypt_locations = (locations_receiver: number[]): [string, number] => {
     console.log("participating as receiver");
     console.log("=========================\nSTEP 2: encrypt locations\n=========================");
