@@ -60,101 +60,101 @@ export const setup = async () => {
 };
 
 // Step 2
-export const receiver_encrypt_locations = (locations_receiver: number[]): [string, number] => {
-    console.log("participating as receiver");
+export const alice_encrypt_locations = (locations_alice: number[]): [string, number] => {
+    console.log("Participating as Alice");
     console.log("=========================\nSTEP 2: encrypt locations\n=========================");
 
-    const set_receiver = Int32Array.from(locations_receiver);
-    const set_receiver_length = set_receiver.length;
+    const set_alice = Int32Array.from(locations_alice);
+    const set_alice_length = set_alice.length;
 
-    // encode receiver set
-    const set_plaintexts_receiver = encoder.encode(set_receiver) as PlainText;
+    // Encode Alice's set
+    const set_plaintexts_alice = encoder.encode(set_alice) as PlainText;
 
-    // encrypt each element in the receiver set
-    // this is sent to the sender
-    const set_ciphertexts_receiver = encryptor.encrypt(set_plaintexts_receiver) as CipherText;
+    // Encrypt each element in Alice's set
+    // This is sent to Bob
+    const set_ciphertexts_alice = encryptor.encrypt(set_plaintexts_alice) as CipherText;
 
-    const set_ciphertexts_receiver_string = set_ciphertexts_receiver.save();
+    const set_ciphertexts_alice_string = set_ciphertexts_alice.save();
 
-    console.log("sending encrypted locations: \n", set_ciphertexts_receiver_string);
+    console.log("Sending Alice's encrypted locations: \n", set_ciphertexts_alice_string);
 
-    return [set_ciphertexts_receiver_string, set_receiver_length];
+    return [set_ciphertexts_alice_string, set_alice_length];
 };
 
-// step 3 + optimization
-export const sender_homomorphicaly_subtract_locations = (
-    set_ciphertexts_receiver_string: string,
-    set_receiver_length: number,
-    locations_sender: number[]
+// Step 3 (with optimization)
+export const bob_homomorphic_operations = (
+    set_ciphertexts_alice_string: string,
+    set_alice_length: number,
+    locations_bob: number[]
 ): string[] => {
-    console.log("participating as sender");
+    console.log("Participating as Bob");
     console.log(
         "============================================\nSTEP 3: homomorphically compute intersection\n============================================"
     );
     console.log("(optimization) using batches of size " + batch_size);
-    let results_sender: string[] = [];
-    let set_ciphertexts_receiver: CipherText = seal.CipherText();
+    let results_bob: string[] = [];
+    let set_ciphertexts_alice: CipherText = seal.CipherText();
 
-    set_ciphertexts_receiver.load(context, set_ciphertexts_receiver_string);
+    set_ciphertexts_alice.load(context, set_ciphertexts_alice_string);
 
-    // as specified in the README, we split the sender set into multiple subsets, each of size batch_size, for optimization
-    const sets_plaintexts_sender = [];
-    for (let i = 0; i < locations_sender.length; i += batch_size) {
-        const batch = locations_sender.slice(i, i + batch_size);
-        sets_plaintexts_sender.push(Int32Array.from(batch));
+    // For the optimization, we split Bob's set into multiple subsets, each of size batch_size, for optimization
+    const sets_plaintexts_bob = [];
+    for (let i = 0; i < locations_bob.length; i += batch_size) {
+        const batch = locations_bob.slice(i, i + batch_size);
+        sets_plaintexts_bob.push(Int32Array.from(batch));
     }
     let counter = 0;
-    sets_plaintexts_sender.forEach((set_plaintexts_sender) => {
-        // perform step 3 of the algorithm with each subset
-        let random_plaintext = new Int32Array(set_receiver_length);
+    sets_plaintexts_bob.forEach((set_plaintexts_bob) => {
+        let random_plaintext = new Int32Array(set_alice_length);
         crypto.getRandomValues(random_plaintext);
         const random_plaintext_encoded = encoder.encode(random_plaintext) as PlainText;
 
-        const result_sender = seal.CipherText();
-        const result_sender_first_value = Int32Array.from(Array(set_receiver_length).fill(set_plaintexts_sender[0]));
-        const result_sender_first_value_encoded = encoder.encode(result_sender_first_value) as PlainText;
+        const result_bob = seal.CipherText();
+        const result_bob_first_value = Int32Array.from(Array(set_alice_length).fill(set_plaintexts_bob[0]));
+        const result_bob_first_value_encoded = encoder.encode(result_bob_first_value) as PlainText;
 
-        evaluator.subPlain(set_ciphertexts_receiver, result_sender_first_value_encoded, result_sender);
+        evaluator.subPlain(set_ciphertexts_alice, result_bob_first_value_encoded, result_bob);
 
-        for (let i = 1; i < set_plaintexts_sender.length; i++) {
-            const ith_value_sender = Int32Array.from(Array(set_receiver_length).fill(set_plaintexts_sender[i]));
-            const ith_value_sender_encoded = encoder.encode(ith_value_sender) as PlainText;
+        for (let i = 1; i < set_plaintexts_bob.length; i++) {
+            const ith_value_bob = Int32Array.from(Array(set_alice_length).fill(set_plaintexts_bob[i]));
+            const ith_value_bob_encoded = encoder.encode(ith_value_bob) as PlainText;
             const temp = seal.CipherText();
-            evaluator.subPlain(set_ciphertexts_receiver, ith_value_sender_encoded, temp);
-            evaluator.multiply(result_sender, temp, result_sender);
+            evaluator.subPlain(set_ciphertexts_alice, ith_value_bob_encoded, temp);
+            evaluator.multiply(result_bob, temp, result_bob);
         }
 
-        evaluator.multiplyPlain(result_sender, random_plaintext_encoded, result_sender);
-        const result_sender_string = result_sender.save();
+        evaluator.multiplyPlain(result_bob, random_plaintext_encoded, result_bob);
+        const result_bob_string = result_bob.save();
         console.log(
-            "randomized polynomial for ciphertexts " +
+            "Randomized polynomial for ciphertexts " +
                 counter * batch_size +
                 " to " +
-                Math.min((counter + 1) * batch_size, locations_sender.length) +
+                Math.min((counter + 1) * batch_size, locations_bob.length) +
                 ":\n",
-            result_sender_string
+            result_bob_string
         );
         counter++;
-        results_sender.push(result_sender_string);
+        results_bob.push(result_bob_string);
     });
 
-    return results_sender;
+    return results_bob;
 };
 
-// step 4
-export const receiver_decrypt_intersection = (results_sender: string[], set_receiver_length: number): number[] => {
+// Step 4
+export const alice_decrypt_intersection = (results_bob: string[], set_alice_length: number): number[] => {
+    console.log("Participating as Alice");
     console.log(
         "================================\nSTEP 4: decrypting intersections\n================================\n(belongs to the intersection iff decryption equals 0 in at least one batch)"
     );
     let intersection_indexes = [];
     let counter: number = 1;
-    for (const result_sender of results_sender) {
-        let result_sender_ciphertext: CipherText = seal.CipherText();
-        result_sender_ciphertext.load(context, result_sender);
-        const decrypted = decryptor.decrypt(result_sender_ciphertext) as PlainText;
+    for (const result_bob of results_bob) {
+        let result_bob_ciphertext: CipherText = seal.CipherText();
+        result_bob_ciphertext.load(context, result_bob);
+        const decrypted = decryptor.decrypt(result_bob_ciphertext) as PlainText;
         const decoded = encoder.decode(decrypted);
-        console.log("intersections for batch number " + counter + ":", decoded.slice(0, set_receiver_length));
-        for (let i = 0; i < set_receiver_length; i++) {
+        console.log("Intersections for batch number " + counter + ":", decoded.slice(0, set_alice_length));
+        for (let i = 0; i < set_alice_length; i++) {
             if (decoded[i] == 0) {
                 intersection_indexes.push(i);
             }
@@ -162,7 +162,7 @@ export const receiver_decrypt_intersection = (results_sender: string[], set_rece
         counter++;
     }
 
-    console.log("finished PSI\n");
+    console.log("Finished PSI\n");
 
     return intersection_indexes;
 };

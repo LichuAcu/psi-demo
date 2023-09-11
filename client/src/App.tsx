@@ -1,12 +1,7 @@
 import { useState, useEffect, createContext } from "react";
 import { ChakraProvider, Box, VStack, Grid, theme, Input, Button, HStack, Text } from "@chakra-ui/react";
 import { io } from "socket.io-client";
-import {
-    setup,
-    receiver_decrypt_intersection,
-    receiver_encrypt_locations,
-    sender_homomorphicaly_subtract_locations,
-} from "./logic";
+import { setup, alice_decrypt_intersection, alice_encrypt_locations, bob_homomorphic_operations } from "./logic";
 
 localStorage.debug = "*";
 
@@ -51,11 +46,11 @@ export const App = () => {
     }
 
     function handleIntersect() {
-        const locations_receiver = storageLocations.map(Number);
-        const [set_ciphertexts_receiver, set_receiver_length] = receiver_encrypt_locations(locations_receiver);
+        const locations_alice = storageLocations.map(Number);
+        const [set_ciphertexts_alice, set_alice_length] = alice_encrypt_locations(locations_alice);
         const message: CipherTextsMessage = {
-            ciphers: set_ciphertexts_receiver,
-            length: set_receiver_length,
+            ciphers: set_ciphertexts_alice,
+            length: set_alice_length,
         };
         socket.emit("firstRoundCipherTexts", message);
     }
@@ -71,7 +66,7 @@ export const App = () => {
 
         socket.on("updatedSecondRoundCipherTexts", ({ ciphers, length }: CipherTextsListMessage) => {
             // console.log("listened updatedSecondRoundCipherTexts");
-            const intersection_locations = receiver_decrypt_intersection(ciphers, length);
+            const intersection_locations = alice_decrypt_intersection(ciphers, length);
             setIntersection(intersection_locations);
             const message = { intersection_locations };
             socket.emit("postIntersection", message);
@@ -91,12 +86,8 @@ export const App = () => {
 
         socket.on("updatedFirstRoundCipherTexts", ({ ciphers, length }: CipherTextsMessage) => {
             // console.log("listened updatedFirstRoundCipherTexts");
-            const locations_sender = storageLocations.map(Number);
-            const secondRoundCiphers: string[] = sender_homomorphicaly_subtract_locations(
-                ciphers,
-                length,
-                locations_sender
-            );
+            const locations_bob = storageLocations.map(Number);
+            const secondRoundCiphers: string[] = bob_homomorphic_operations(ciphers, length, locations_bob);
             const message: CipherTextsListMessage = { ciphers: secondRoundCiphers, length: length };
             socket.emit("secondRoundCipherTexts", message);
         });
@@ -113,7 +104,7 @@ export const App = () => {
                         </HStack>
                         <HStack width="100%" paddingTop="2em">
                             <Input
-                                placeholder="Numerical values separated by commas"
+                                placeholder="Enter integer values separated by commas"
                                 onChange={(event) => setInput(event.target.value)}
                                 value={input}
                             />
