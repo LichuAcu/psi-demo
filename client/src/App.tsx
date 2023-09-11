@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext } from "react";
 import { ChakraProvider, Box, VStack, Grid, theme, Input, Button, HStack, Text } from "@chakra-ui/react";
 import { io } from "socket.io-client";
-import { setup, alice_decrypt_intersection, alice_encrypt_locations, bob_homomorphic_operations } from "./logic";
+import { setup, alice_decrypt_intersection, alice_encrypt_elements, bob_homomorphic_operations } from "./logic";
 
 localStorage.debug = "*";
 
@@ -16,7 +16,7 @@ type CipherTextsListMessage = {
 };
 
 type IntersectionMessage = {
-    locations: string[];
+    elements: string[];
 };
 
 const initialStringList: string[] = [];
@@ -24,30 +24,30 @@ const initialNumberList: number[] = [];
 const socket = io("ws://localhost:4000");
 
 export const App = () => {
-    const [storageLocations, setStorageLocations] = useState(initialStringList);
+    const [elements, setElements] = useState(initialStringList);
     const [intersection, setIntersection] = useState(initialNumberList);
     const [input, setInput] = useState("");
 
-    const addLocations = (newLocations: string[]) => {
-        let newList = storageLocations.concat(newLocations);
-        setStorageLocations(newList);
+    const addElements = (newElements: string[]) => {
+        let newList = elements.concat(newElements);
+        setElements(newList);
     };
 
     function handleAdd() {
         // handle multiple inputs at once
-        addLocations(input.split(","));
+        addElements(input.split(","));
         setInput("");
         setIntersection(initialNumberList);
     }
 
     function handleClear() {
-        setStorageLocations(initialStringList);
+        setElements(initialStringList);
         setIntersection(initialNumberList);
     }
 
     function handleIntersect() {
-        const locations_alice = storageLocations.map(Number);
-        const [set_ciphertexts_alice, set_alice_length] = alice_encrypt_locations(locations_alice);
+        const elements_alice = elements.map(Number);
+        const [set_ciphertexts_alice, set_alice_length] = alice_encrypt_elements(elements_alice);
         const message: CipherTextsMessage = {
             ciphers: set_ciphertexts_alice,
             length: set_alice_length,
@@ -66,13 +66,13 @@ export const App = () => {
 
         socket.on("updatedSecondRoundCipherTexts", ({ ciphers, length }: CipherTextsListMessage) => {
             // console.log("listened updatedSecondRoundCipherTexts");
-            const intersection_locations = alice_decrypt_intersection(ciphers, length);
-            setIntersection(intersection_locations);
-            const message = { intersection_locations };
+            const intersection_elements = alice_decrypt_intersection(ciphers, length);
+            setIntersection(intersection_elements);
+            const message = { intersection_elements };
             socket.emit("postIntersection", message);
         });
 
-        socket.on("updatedIntersection", ({ locations }: IntersectionMessage) => {
+        socket.on("updatedIntersection", ({ elements }: IntersectionMessage) => {
             // console.log("listened updatedIntersection");
         });
 
@@ -86,12 +86,12 @@ export const App = () => {
 
         socket.on("updatedFirstRoundCipherTexts", ({ ciphers, length }: CipherTextsMessage) => {
             // console.log("listened updatedFirstRoundCipherTexts");
-            const locations_bob = storageLocations.map(Number);
-            const secondRoundCiphers: string[] = bob_homomorphic_operations(ciphers, length, locations_bob);
+            const elements_bob = elements.map(Number);
+            const secondRoundCiphers: string[] = bob_homomorphic_operations(ciphers, length, elements_bob);
             const message: CipherTextsListMessage = { ciphers: secondRoundCiphers, length: length };
             socket.emit("secondRoundCipherTexts", message);
         });
-    }, [storageLocations]);
+    }, [elements]);
 
     return (
         <ChakraProvider theme={theme}>
@@ -119,7 +119,7 @@ export const App = () => {
                             Intersect
                         </Button>
                         <VStack alignSelf="center" alignItems="center">
-                            {storageLocations.map((item, idx) => (
+                            {elements.map((item, idx) => (
                                 <Box
                                     width="10em"
                                     borderRadius=".2em"

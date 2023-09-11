@@ -60,11 +60,11 @@ export const setup = async () => {
 };
 
 // Step 2
-export const alice_encrypt_locations = (locations_alice: number[]): [string, number] => {
+export const alice_encrypt_elements = (elements_alice: number[]): [string, number] => {
     console.log("Participating as Alice");
-    console.log("=========================\nSTEP 2: encrypt locations\n=========================");
+    console.log("=========================\nSTEP 2: encrypt elements\n=========================");
 
-    const set_alice = Int32Array.from(locations_alice);
+    const set_alice = Int32Array.from(elements_alice);
     const set_alice_length = set_alice.length;
 
     // Encode Alice's set
@@ -76,7 +76,7 @@ export const alice_encrypt_locations = (locations_alice: number[]): [string, num
 
     const set_ciphertexts_alice_string = set_ciphertexts_alice.save();
 
-    console.log("Sending Alice's encrypted locations: \n", set_ciphertexts_alice_string);
+    console.log("Sending Alice's encrypted elements: \n", set_ciphertexts_alice_string);
 
     return [set_ciphertexts_alice_string, set_alice_length];
 };
@@ -85,7 +85,7 @@ export const alice_encrypt_locations = (locations_alice: number[]): [string, num
 export const bob_homomorphic_operations = (
     set_ciphertexts_alice_string: string,
     set_alice_length: number,
-    locations_bob: number[]
+    elements_bob: number[]
 ): string[] => {
     console.log("Participating as Bob");
     console.log(
@@ -99,8 +99,8 @@ export const bob_homomorphic_operations = (
 
     // For the optimization, we split Bob's set into multiple subsets, each of size batch_size, for optimization
     const sets_plaintexts_bob = [];
-    for (let i = 0; i < locations_bob.length; i += batch_size) {
-        const batch = locations_bob.slice(i, i + batch_size);
+    for (let i = 0; i < elements_bob.length; i += batch_size) {
+        const batch = elements_bob.slice(i, i + batch_size);
         sets_plaintexts_bob.push(Int32Array.from(batch));
     }
     let counter = 0;
@@ -129,7 +129,7 @@ export const bob_homomorphic_operations = (
             "Randomized polynomial for ciphertexts " +
                 counter * batch_size +
                 " to " +
-                Math.min((counter + 1) * batch_size, locations_bob.length) +
+                Math.min((counter + 1) * batch_size, elements_bob.length) +
                 ":\n",
             result_bob_string
         );
