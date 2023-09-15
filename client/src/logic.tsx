@@ -92,68 +92,70 @@ export const bob_homomorphic_operations = (
         "============================================\nSTEP 3: homomorphically compute intersection\n============================================"
     );
     console.log("(optimization) using batches of size " + batch_size);
-    let results_bob: string[] = [];
+    let final_products: string[] = [];
     let set_ciphertexts_alice: CipherText = seal.CipherText();
 
     set_ciphertexts_alice.load(context, set_ciphertexts_alice_string);
 
     // For the optimization, we split Bob's set into multiple subsets, each of size batch_size, for optimization
-    const sets_plaintexts_bob = [];
+    const sets_plaintexts_bob: Int32Array[] = [];
     for (let i = 0; i < elements_bob.length; i += batch_size) {
         const batch = elements_bob.slice(i, i + batch_size);
         sets_plaintexts_bob.push(Int32Array.from(batch));
     }
     let counter = 0;
     sets_plaintexts_bob.forEach((set_plaintexts_bob) => {
-        let random_plaintext = new Int32Array(set_alice_length);
-        crypto.getRandomValues(random_plaintext);
-        const random_plaintext_encoded = encoder.encode(random_plaintext) as PlainText;
+        const final_product = seal.CipherText();
 
-        const result_bob = seal.CipherText();
-        const result_bob_first_value = Int32Array.from(Array(set_alice_length).fill(set_plaintexts_bob[0]));
-        const result_bob_first_value_encoded = encoder.encode(result_bob_first_value) as PlainText;
-
-        evaluator.subPlain(set_ciphertexts_alice, result_bob_first_value_encoded, result_bob);
+        // Homomorphically initialize result to first Alice's element - first Bob's element
+        const first_element_bob = Int32Array.from(Array(set_alice_length).fill(set_plaintexts_bob[0]));
+        const first_element_bob_encoded = encoder.encode(first_element_bob) as PlainText;
+        evaluator.subPlain(set_ciphertexts_alice, first_element_bob_encoded, final_product);
 
         for (let i = 1; i < set_plaintexts_bob.length; i++) {
-            const ith_value_bob = Int32Array.from(Array(set_alice_length).fill(set_plaintexts_bob[i]));
-            const ith_value_bob_encoded = encoder.encode(ith_value_bob) as PlainText;
+            const ith_element_bob = Int32Array.from(Array(set_alice_length).fill(set_plaintexts_bob[i]));
+            const ith_element_bob_encoded = encoder.encode(ith_element_bob) as PlainText;
             const temp = seal.CipherText();
-            evaluator.subPlain(set_ciphertexts_alice, ith_value_bob_encoded, temp);
-            evaluator.multiply(result_bob, temp, result_bob);
+            evaluator.subPlain(set_ciphertexts_alice, ith_element_bob_encoded, temp);
+            evaluator.multiply(final_product, temp, final_product);
         }
 
-        evaluator.multiplyPlain(result_bob, random_plaintext_encoded, result_bob);
-        const result_bob_string = result_bob.save();
-        console.log(
-            "Randomized polynomial for ciphertexts " +
-                counter * batch_size +
-                " to " +
-                Math.min((counter + 1) * batch_size, elements_bob.length) +
-                ":\n",
-            result_bob_string
-        );
+        let random_plaintext = new Int32Array(set_alice_length);
+        let random_plaintext_encoded: PlainText;
+        crypto.getRandomValues(random_plaintext);
+        random_plaintext_encoded = encoder.encode(random_plaintext) as PlainText;
+        evaluator.multiplyPlain(final_product, random_plaintext_encoded, final_product);
+
+        const final_product_string = final_product.save();
+        // console.log(
+        //     "Randomized polynomial for ciphertexts " +
+        //         counter * batch_size +
+        //         " to " +
+        //         Math.min((counter + 1) * batch_size, elements_bob.length) +
+        //         ":\n",
+        //     result_bob_string
+        // );
         counter++;
-        results_bob.push(result_bob_string);
+        final_products.push(final_product_string);
     });
 
-    return results_bob;
+    return final_products;
 };
 
 // Step 4
-export const alice_decrypt_intersection = (results_bob: string[], set_alice_length: number): number[] => {
+export const alice_decrypt_intersection = (final_products: string[], set_alice_length: number): number[] => {
     console.log("Participating as Alice");
     console.log(
         "================================\nSTEP 4: decrypting intersections\n================================\n(belongs to the intersection iff decryption equals 0 in at least one batch)"
     );
-    let intersection_indexes = [];
+    let intersection_indexes: number[] = [];
     let counter: number = 1;
-    for (const result_bob of results_bob) {
-        let result_bob_ciphertext: CipherText = seal.CipherText();
-        result_bob_ciphertext.load(context, result_bob);
-        const decrypted = decryptor.decrypt(result_bob_ciphertext) as PlainText;
+    for (const final_product of final_products) {
+        let final_product_ciphertext: CipherText = seal.CipherText();
+        final_product_ciphertext.load(context, final_product);
+        const decrypted = decryptor.decrypt(final_product_ciphertext) as PlainText;
         const decoded = encoder.decode(decrypted);
-        console.log("Intersections for batch number " + counter + ":", decoded.slice(0, set_alice_length));
+        // console.log("Intersections for batch number " + counter + ":", decoded.slice(0, set_alice_length));
         for (let i = 0; i < set_alice_length; i++) {
             if (decoded[i] == 0) {
                 intersection_indexes.push(i);
